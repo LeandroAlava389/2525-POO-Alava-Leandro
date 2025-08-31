@@ -12,13 +12,11 @@ class Producto:
         self._nombre = None
         self._cantidad = None
         self._precio = None
-        # Inicialización usando setters para validar
         self.id = id_
         self.nombre = nombre
         self.cantidad = cantidad
         self.precio = precio
 
-    # id
     @property
     def id(self) -> int:
         return self._id
@@ -31,7 +29,6 @@ class Producto:
             raise ValueError("El ID no puede ser negativo.")
         self._id = value
 
-    # nombre
     @property
     def nombre(self) -> str:
         return self._nombre
@@ -42,7 +39,6 @@ class Producto:
             raise ValueError("El nombre debe ser una cadena no vacía.")
         self._nombre = value.strip()
 
-    # cantidad
     @property
     def cantidad(self) -> int:
         return self._cantidad
@@ -55,7 +51,6 @@ class Producto:
             raise ValueError("La cantidad no puede ser negativa.")
         self._cantidad = value
 
-    # precio
     @property
     def precio(self) -> float:
         return self._precio
@@ -73,17 +68,11 @@ class Producto:
     def __repr__(self) -> str:
         return f"Producto(id={self.id}, nombre='{self.nombre}', cantidad={self.cantidad}, precio={self.precio:.2f})"
 
-    # --- Persistencia en texto ---
     def a_linea(self) -> str:
-        # Formato: id|nombre|cantidad|precio\n
         return f"{self.id}{DELIM}{self.nombre}{DELIM}{self.cantidad}{DELIM}{self.precio}\n"
 
     @staticmethod
     def desde_linea(linea: str) -> "Producto":
-        """
-        Parseo robusto de una línea.
-        Lanza ValueError si la línea es inválida/corrupta.
-        """
         partes = [p.strip() for p in linea.rstrip("\n").split(DELIM)]
         if len(partes) != 4:
             raise ValueError("Número de columnas inválido.")
@@ -95,39 +84,29 @@ class Producto:
 
 
 class Inventario:
-    """
-    - Carga automática desde archivo al crear.
-    - Guardado atómico (tmp + os.replace).
-    - Rollback en memoria si falla la escritura.
-    - Manejo de excepciones de E/S (archivo inexistente, permisos, errores OS).
-    """
     def __init__(self, ruta_archivo: str = "inventario.txt") -> None:
-        self._productos: List[Producto] = []  # Colección principal (lista)
+        self._productos: List[Producto] = []
         self.ruta_archivo = ruta_archivo
         self._asegurar_archivo()
         self._cargar_desde_archivo()
 
-    # Propiedad de solo lectura (copia) 
     @property
     def productos(self) -> List[Producto]:
         return list(self._productos)
 
-    # Utilidades de archivo 
     def _asegurar_archivo(self) -> None:
-        """Crea el archivo si no existe. No revienta si no hay permisos; avisa."""
         if not os.path.exists(self.ruta_archivo):
             try:
                 with open(self.ruta_archivo, "w", encoding="utf-8") as f:
-                    f.write("")  # crear vacío
+                    f.write("")
             except PermissionError:
-                print(f"[WARN] Sin permisos para crear '{self.ruta_archivo}'. "
+                print(f"Sin permisos para crear '{self.ruta_archivo}'. "
                       "Se trabajará solo en memoria y no se guardará en disco.")
             except OSError as e:
-                print(f"[WARN] No se pudo crear '{self.ruta_archivo}': {e}. "
+                print(f"No se pudo crear '{self.ruta_archivo}': {e}. "
                       "Se trabajará solo en memoria.")
 
     def _cargar_desde_archivo(self) -> None:
-        """Reconstruye el inventario desde el archivo. Líneas corruptas se saltan."""
         if not os.path.exists(self.ruta_archivo):
             return
         try:
@@ -137,22 +116,17 @@ class Inventario:
                         continue
                     try:
                         p = Producto.desde_linea(linea)
-                        # Mantener unicidad por ID (si hay duplicados en archivo, el último se queda)
                         self._reemplazar_o_agregar(p)
                     except Exception as e:
-                        print(f"[WARN] Línea {idx} corrupta en '{self.ruta_archivo}': {e}. Saltada.")
+                        print(f"Línea {idx} corrupta en '{self.ruta_archivo}': {e}. Saltada.")
         except PermissionError:
-            print(f"[ERROR] Sin permisos de lectura para '{self.ruta_archivo}'. "
+            print(f"Sin permisos de lectura para '{self.ruta_archivo}'. "
                   "Se continuará con inventario en memoria.")
         except OSError as e:
-            print(f"[ERROR] Error leyendo '{self.ruta_archivo}': {e}. "
+            print(f"Error leyendo '{self.ruta_archivo}': {e}. "
                   "Se continuará con inventario en memoria.")
 
     def _guardar_atomico(self) -> None:
-        """
-        Escribe todas las filas en un archivo temporal y hace replace sobre el archivo final.
-        Minimiza corrupción si hay cortes/errores a mitad.
-        """
         directorio = os.path.dirname(self.ruta_archivo) or "."
         try:
             fd, ruta_tmp = tempfile.mkstemp(prefix=".inv_", dir=directorio, text=True)
@@ -162,7 +136,6 @@ class Inventario:
                         tmp.write(p.a_linea())
                 os.replace(ruta_tmp, self.ruta_archivo)
             except Exception:
-                # Intentar limpiar temporal
                 try:
                     os.remove(ruta_tmp)
                 except Exception:
@@ -173,7 +146,6 @@ class Inventario:
         except OSError as e:
             raise OSError(f"Fallo de E/S al guardar el inventario: {e}")
 
-    # Operaciones internas de lista 
     def _reemplazar_o_agregar(self, producto: Producto) -> None:
         for i, p in enumerate(self._productos):
             if p.id == producto.id:
@@ -181,23 +153,18 @@ class Inventario:
                 return
         self._productos.append(producto)
 
-    # API pública (con persistencia y rollback) 
     def anadir_producto(self, producto: Producto) -> bool:
-        """Añade si el ID es único. Persiste en archivo. Devuelve True si se añadió."""
         if any(p.id == producto.id for p in self._productos):
             return False
-        # Cambio en memoria
         self._productos.append(producto)
         try:
             self._guardar_atomico()
             return True
         except Exception as e:
-            # Rollback si falló la escritura
             self._productos.pop()
             raise e
 
     def eliminar_por_id(self, id_: int) -> bool:
-        """Elimina por ID. Persiste. Devuelve True si se eliminó."""
         for i, p in enumerate(self._productos):
             if p.id == id_:
                 backup = self._productos[i]
@@ -206,16 +173,13 @@ class Inventario:
                     self._guardar_atomico()
                     return True
                 except Exception as e:
-                    # Rollback
                     self._productos.insert(i, backup)
                     raise e
         return False
 
     def actualizar_por_id(self, id_: int, *, cantidad: Optional[int] = None, precio: Optional[float] = None) -> bool:
-        """Actualiza cantidad y/o precio por ID. Persiste. Devuelve True si se actualizó."""
         for i, p in enumerate(self._productos):
             if p.id == id_:
-                # Guardar estado previo para rollback
                 prev = Producto(p.id, p.nombre, p.cantidad, p.precio)
                 try:
                     if cantidad is not None:
@@ -225,20 +189,18 @@ class Inventario:
                     self._guardar_atomico()
                     return True
                 except Exception as e:
-                    # Rollback
                     self._productos[i] = prev
                     raise e
         return False
 
     def buscar_por_nombre(self, termino: str) -> List[Producto]:
-        """Búsqueda parcial (case-insensitive)."""
         termino = termino.strip().lower()
         return [p for p in self._productos if termino in p.nombre.lower()]
 
     def mostrar_todos(self) -> List[Producto]:
         return list(self._productos)
 
-#  Interfaz de usuario (CLI)
+
 def leer_entero(prompt: str) -> int:
     while True:
         try:
@@ -270,8 +232,21 @@ def imprimir_tabla(productos: List[Producto]) -> None:
     for fila in filas:
         print(fmt_row(fila))
 
+
 def menu():
-    inventario = Inventario("inventario.txt")
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    carpeta = "Semana9-10"
+
+    target_dir = base_dir if os.path.basename(base_dir) == carpeta else os.path.join(base_dir, carpeta)
+
+    # Asegura que la carpeta exista
+    os.makedirs(target_dir, exist_ok=True)
+
+    ruta = os.path.join(target_dir, "inventario.txt")
+    inventario = Inventario(ruta)
+   
+
     opciones = {
         "1": "Añadir producto",
         "2": "Eliminar producto por ID",
@@ -295,27 +270,27 @@ def menu():
                 precio = leer_flotante("Precio: ")
                 producto = Producto(id_, nombre, cantidad, precio)
                 if inventario.anadir_producto(producto):
-                    print("[OK] Producto añadido y guardado en archivo.")
+                    print("Producto añadido y guardado en archivo.")
                 else:
-                    print("[INFO] Ya existe un producto con ese ID. No se añadió.")
+                    print("Ya existe un producto con ese ID. No se añadió.")
             except PermissionError as e:
-                print(f"[ERROR] Permisos al guardar: {e}")
+                print(f"Error permisos al guardar: {e}")
             except OSError as e:
-                print(f"[ERROR] E/S al guardar: {e}")
+                print(f"Error E/S al guardar: {e}")
             except Exception as e:
-                print(f"[ERROR] Al crear/validar el producto: {e}")
+                print(f"Error al crear/validar el producto: {e}")
 
         elif opcion == "2":
             try:
                 id_ = leer_entero("ID del producto a eliminar: ")
                 if inventario.eliminar_por_id(id_):
-                    print("[OK] Producto eliminado y archivo actualizado.")
+                    print("Producto eliminado y archivo actualizado.")
                 else:
-                    print("[INFO] No existe un producto con ese ID.")
+                    print("No existe un producto con ese ID.")
             except PermissionError as e:
-                print(f"[ERROR] Permisos al guardar: {e}")
+                print(f"Error permisos al guardar: {e}")
             except OSError as e:
-                print(f"[ERROR] E/S al guardar: {e}")
+                print(f"Error E/S al guardar: {e}")
 
         elif opcion == "3":
             try:
@@ -330,15 +305,15 @@ def menu():
                     precio = leer_flotante("Nuevo precio: ")
                 ok = inventario.actualizar_por_id(id_, cantidad=cantidad, precio=precio)
                 if ok:
-                    print("[OK] Producto actualizado y guardado en archivo.")
+                    print("Producto actualizado y guardado en archivo.")
                 else:
-                    print("[INFO] No existe un producto con ese ID.")
+                    print(" No existe un producto con ese ID.")
             except (TypeError, ValueError) as ve:
-                print(f"[ERROR] Datos inválidos: {ve}")
+                print(f"Error datos inválidos: {ve}")
             except PermissionError as e:
-                print(f"[ERROR] Permisos al guardar: {e}")
+                print(f"Error permisos al guardar: {e}")
             except OSError as e:
-                print(f"[ERROR] E/S al guardar: {e}")
+                print(f"Error E/S al guardar: {e}")
 
         elif opcion == "4":
             termino = input("Nombre o parte del nombre a buscar: ").strip()
@@ -355,6 +330,6 @@ def menu():
         else:
             print("Opción no válida. Intenta de nuevo.")
 
-# Punto de entrada
+
 if __name__ == "__main__":
     menu()

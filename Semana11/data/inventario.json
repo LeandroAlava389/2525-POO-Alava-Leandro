@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "productos": [
+    {
+      "id": 1,
+      "nombre": "Manzana",
+      "cantidad": 187,
+      "precio": 0.25
+    },
+    {
+      "id": 2,
+      "nombre": "banana",
+      "cantidad": 2,
+      "precio": 0.3
+    },
+    {
+      "id": 3,
+      "nombre": "Pera",
+      "cantidad": 40,
+      "precio": 0.3
+    },
+    {
+      "id": 4,
+      "nombre": "Sanndia",
+      "cantidad": 47,
+      "precio": 1.5
+    }
+  ]
+}
